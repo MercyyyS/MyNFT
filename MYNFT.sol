@@ -17,7 +17,7 @@ contract MYNFT is ERC721Enumerable, Ownable {
     uint256 public maxSupply;
     uint256 public maxMintAmountPerTx;
     // Number of nfts is limited to 3 per user during whitelisting
-    uint256 public nftPerAddressLimit = 3;
+    uint256 public nftPerAddressLimit;
 
     bool public paused = true;
     bool public revealed = false;
@@ -31,13 +31,15 @@ contract MYNFT is ERC721Enumerable, Ownable {
         string memory _symbol,
         uint256 _cost,
         uint256 _maxSupply,
+        uint256 _nftPerAddressLimit,
         uint256 _maxMintAmountPerTx,
         string memory _hiddenMetadataUri
     ) ERC721(_name, _symbol) {
         setHiddenMetadataUri(_hiddenMetadataUri);
-        setCost(_cost);
-        setMaxMintAmountPerTx(_maxMintAmountPerTx);
+        changeCost(_cost);
+        changeMaxMintAmountPerTx(_maxMintAmountPerTx);
         maxSupply = _maxSupply;
+        nftPerAddressLimit = _nftPerAddressLimit;
     }
 
     // public
@@ -72,18 +74,15 @@ contract MYNFT is ERC721Enumerable, Ownable {
         }
     }
 
-    function isWhitelisted(address _user) public view returns (bool) {
-        uint256 whitelistedCount = whitelistedAddresses.length;
-        for (uint256 i; i < whitelistedCount; ) {
-            if (whitelistedAddresses[i] == _user) {
-                return true;
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return false;
+    // Returns the correct amount the user needs to pay for the mint
+    function getmintPayValue(uint256 _mintAmount) 
+    public 
+    view 
+    returns(uint)
+    {
+        return cost * _mintAmount;
     }
+
 
     function walletOfOwner(address _owner)
         public
@@ -132,65 +131,90 @@ contract MYNFT is ERC721Enumerable, Ownable {
 
     //only owner
 
-    function startWhitelisting() external payable onlyOwner {
+    function startWhitelisting() external onlyOwner {
         require(paused && !whitelistMintEnabled, "whitelisting impossible");
         pause(false);
         setWhitelistMintEnabled(true);
     }
 
+    // Deletes the previous set of users and set this set
+    function whitelistUsers(address[] calldata _users)
+        public
+        onlyOwner
+    {
+        delete whitelistedAddresses;
+        whitelistedAddresses = _users;
+    }
+
+    function whitelistUser(address _user)
+    public 
+    onlyOwner{
+        whitelistedAddresses.push(_user);
+    }
+
+    function isWhitelisted(address _user) public view returns (bool) {
+        uint256 whitelistedCount = whitelistedAddresses.length;
+        for (uint256 i; i < whitelistedCount; ) {
+            if (whitelistedAddresses[i] == _user) {
+                return true;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return false;
+    }
+
     function startPresale(uint256 _newCost, uint256 _newmaxMintAmount)
         external
-        payable
         onlyOwner
     {
         require(!paused && whitelistMintEnabled, "Presale impossible");
         setWhitelistMintEnabled(false);
-        setCost(_newCost);
-        setMaxMintAmountPerTx(_newmaxMintAmount);
+        changeCost(_newCost);
+        changeMaxMintAmountPerTx(_newmaxMintAmount);
     }
 
     function startPublicSale(
         string memory _newBaseURI,
         uint256 _newCost,
         uint256 _newmaxMintAmount
-    ) external payable onlyOwner {
+    ) external  onlyOwner {
         require(
             !paused && !whitelistMintEnabled && !revealed,
             "Public sale impossible"
         );
         reveal(_newBaseURI);
-        setCost(_newCost);
-        setMaxMintAmountPerTx(_newmaxMintAmount);
+        changeCost(_newCost);
+        changeMaxMintAmountPerTx(_newmaxMintAmount);
     }
 
-    function reveal(string memory _newBaseURI) public payable onlyOwner {
+    function reveal(string memory _newBaseURI) public  onlyOwner {
         revealed = true;
         setBaseURI(_newBaseURI);
     }
 
-    function setNftPerAddressLimit(uint256 _limit) public payable onlyOwner {
+    function changeNftPerAddressLimit(uint256 _limit) public  onlyOwner {
         nftPerAddressLimit = _limit;
     }
 
-    function setCost(uint256 _newCost) public payable onlyOwner {
+    function changeCost(uint256 _newCost) public onlyOwner {
         cost = _newCost;
     }
 
-    function setMaxMintAmountPerTx(uint256 _newmaxMintAmount)
+    function changeMaxMintAmountPerTx(uint256 _newmaxMintAmount)
         public
-        payable
         onlyOwner
     {
         maxMintAmountPerTx = _newmaxMintAmount;
     }
 
-    function setBaseURI(string memory _newBaseURI) public payable onlyOwner {
+    function setBaseURI(string memory _newBaseURI) public  onlyOwner {
         baseURI = _newBaseURI;
     }
 
     function setBaseExtension(string memory _newBaseExtension)
         public
-        payable
         onlyOwner
     {
         baseExtension = _newBaseExtension;
@@ -198,30 +222,21 @@ contract MYNFT is ERC721Enumerable, Ownable {
 
     function setHiddenMetadataUri(string memory _hiddenMetadataUri)
         public
-        payable
         onlyOwner
     {
         hiddenMetadataUri = _hiddenMetadataUri;
     }
 
-    function pause(bool _state) public payable onlyOwner {
+    function pause(bool _state) public  onlyOwner {
         paused = _state;
     }
 
-    function setWhitelistMintEnabled(bool _state) public payable onlyOwner {
+    function setWhitelistMintEnabled(bool _state) public  onlyOwner {
         whitelistMintEnabled = _state;
     }
 
-    function whitelistUsers(address[] calldata _users)
-        public
-        payable
-        onlyOwner
-    {
-        delete whitelistedAddresses;
-        whitelistedAddresses = _users;
-    }
 
-    function withdraw() public payable onlyOwner {
+    function withdraw() public  onlyOwner {
         (bool os, ) = payable(owner()).call{value: address(this).balance}("");
         require(os);
     }
